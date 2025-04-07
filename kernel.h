@@ -2,13 +2,24 @@
 
 #include "common.h"
 
-// redefinition of __asm__ to improve readability
-#define asm __asm__
+// The base virtual address of an application image. This needs to match the
+// starting address defined in `user.ld`.
+#define USER_BASE 0x1000000
+
+#define SSTATUS_SPIE (1 << 5)
 
 #define PROCS_MAX 8     // Maximum number of processes
 
 #define PROC_UNUSED   0 // Unused process control structure
 #define PROC_RUNNABLE 1 // Runnable process
+
+// Memory Paging
+#define SATP_SV32 (1u << 31)
+#define PAGE_V    (1 << 0)   // "Valid" bit (entry is enabled)
+#define PAGE_R    (1 << 1)   // Readable
+#define PAGE_W    (1 << 2)   // Writable
+#define PAGE_X    (1 << 3)   // Executable
+#define PAGE_U    (1 << 4)   // User (accessible in user mode)
 
 #define panic(fmt, ...) \
     do {                \
@@ -19,20 +30,21 @@
 #define read_csr(reg)   \
     ({                  \
         u32 tmp;        \
-        asm volatile("csrr %0, " #reg : "=r"(tmp));\
+        __asm__ volatile("csrr %0, " #reg : "=r"(tmp));\
         tmp;            \
     })
 
 #define write_csr(reg, value)   \
     do {                        \
         u32 tmp = (value);      \
-        asm volatile("csrw " #reg ", %0" ::"r"(tmp));\
+        __asm__ volatile("csrw " #reg ", %0" ::"r"(tmp));\
     } while (0)
 
 struct process {
-    int pid;        // Process ID
+    int pid;
     int state;      // Process state: PROC_UNUSED or PROC_RUNNABLE
-    vaddr_t sp;     // Stack pointer
+    vaddr_t sp;
+    u32* page_table;
     u8 stack[8192]; // Kernel stack
 };
 
@@ -72,6 +84,6 @@ struct trap_frame {
 
 struct sbiret
 {
-    long value;
-    long error;
+    i32 value;
+    i32 error;
 };

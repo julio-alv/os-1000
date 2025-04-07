@@ -13,8 +13,3 @@ _(this will probably change in the future to a makefile)_
 
 - Different type definitions, ie `u8` instad of `uint8_t`
 - Using `volatile` instead of `__volatile__` (they seemingly do the same thing)
-- Using `#define asm __asm__` to improve readability
-
-## Todo
-- Complete the guide
-- Improve project structure

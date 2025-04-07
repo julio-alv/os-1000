@@ -1,8 +1,10 @@
 #include "kernel.h"
 #include "common.h"
 
-extern i8 __bss[], __bss_end[], __stack_top[];
-extern i8 __free_ram[], __free_ram_end[];
+extern char __bss[], __bss_end[], __stack_top[];
+extern char __free_ram[], __free_ram_end[];
+extern char __kernel_base[];
+extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 paddr_t alloc_pages(u32 n) {
     static paddr_t next_paddr = (paddr_t)__free_ram;
@@ -20,16 +22,16 @@ struct sbiret sbi_call(
     i16 arg0, i16 arg1, i16 arg2, i16 arg3,
     i16 arg4, i16 arg5, i16 fid, i16 eid)
 {
-    register i16 a0 asm("a0") = arg0;
-    register i16 a1 asm("a1") = arg1;
-    register i16 a2 asm("a2") = arg2;
-    register i16 a3 asm("a3") = arg3;
-    register i16 a4 asm("a4") = arg4;
-    register i16 a5 asm("a5") = arg5;
-    register i16 a6 asm("a6") = fid;
-    register i16 a7 asm("a7") = eid;
+    register i16 a0 __asm__("a0") = arg0;
+    register i16 a1 __asm__("a1") = arg1;
+    register i16 a2 __asm__("a2") = arg2;
+    register i16 a3 __asm__("a3") = arg3;
+    register i16 a4 __asm__("a4") = arg4;
+    register i16 a5 __asm__("a5") = arg5;
+    register i16 a6 __asm__("a6") = fid;
+    register i16 a7 __asm__("a7") = eid;
 
-    asm volatile("ecall"
+    __asm__ volatile("ecall"
         : "=r"(a0), "=r"(a1)
         : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5), "r"(a6), "r"(a7)
         : "memory");
@@ -45,7 +47,7 @@ void putchar(char ch)
 __attribute__((naked))
 __attribute__((aligned(4)))
 void kernel_entry(void) {
-    asm volatile(
+    __asm__ volatile(
         // Retrieve the kernel stack of the running process from sscratch.
         "csrrw sp, sscratch, sp\n"
 
@@ -139,7 +141,7 @@ void switch_context(
     u32* prev_sp,
     u32* next_sp
 ) {
-    asm volatile(
+    __asm__ volatile(
         // Save callee-saved registers onto the current process's stack.
         "addi sp, sp, -13 * 4\n" // Allocate stack space for 13 4-byte registers
         "sw ra,  0  * 4(sp)\n"   // Save callee-saved registers only
@@ -175,13 +177,42 @@ void switch_context(
         "lw s10, 11 * 4(sp)\n"
         "lw s11, 12 * 4(sp)\n"
         "addi sp, sp, 13 * 4\n"  // We've popped 13 4-byte registers from the stack
-        "ret\n"
-        );
+        "ret\n");
+}
+
+void map_page(u32* table1, u32 vaddr, paddr_t paddr, u32 flags) {
+    if (!is_aligned(vaddr, PAGE_SIZE))
+        panic("unaligned vaddr %x", vaddr);
+
+    if (!is_aligned(paddr, PAGE_SIZE))
+        panic("unaligned paddr %x", paddr);
+
+    u32 vpn1 = (vaddr >> 22) & 0x3ff;
+    if ((table1[vpn1] & PAGE_V) == 0) {
+        // Create the non-existent 2nd level page table.
+        u32 pt_paddr = alloc_pages(1);
+        table1[vpn1] = ((pt_paddr / PAGE_SIZE) << 10) | PAGE_V;
+    }
+
+    // Set the 2nd level page table entry to map the physical page.
+    u32 vpn0 = (vaddr >> 12) & 0x3ff;
+    u32* table0 = (u32*)((table1[vpn1] >> 10) * PAGE_SIZE);
+    table0[vpn0] = ((paddr / PAGE_SIZE) << 10) | flags | PAGE_V;
+}
+
+// ↓ __attribute__((naked)) is very important!
+__attribute__((naked)) void user_entry(void) {
+    __asm__ volatile(
+        "csrw sepc, %[sepc]        \n"
+        "csrw sstatus, %[sstatus]  \n"
+        "sret                      \n"
+        ::[sepc] "r" (USER_BASE),
+        [sstatus] "r" (SSTATUS_SPIE));
 }
 
 struct process procs[PROCS_MAX]; // All process control structures.
 
-struct process* create_process(u32 pc) {
+struct process* create_process(const void* image, size_t image_size) {
     // Find an unused process control structure.
     struct process* proc = null;
     int i;
@@ -210,18 +241,40 @@ struct process* create_process(u32 pc) {
     *--sp = 0;          // s2
     *--sp = 0;          // s1
     *--sp = 0;          // s0
-    *--sp = (u32)pc;    // ra
+    *--sp = (u32)user_entry;    // ra
+
+    // Map kernel pages.
+    u32* page_table = (u32*)alloc_pages(1);
+    for (paddr_t paddr = (paddr_t)__kernel_base;
+        paddr < (paddr_t)__free_ram_end; paddr += PAGE_SIZE)
+        map_page(page_table, paddr, paddr, PAGE_R | PAGE_W | PAGE_X);
+
+    // Map user pages.
+    for (u32 off = 0; off < image_size; off += PAGE_SIZE) {
+        paddr_t page = alloc_pages(1);
+
+        // Handle the case where the data to be copied is smaller than the
+        // page size.
+        size_t remaining = image_size - off;
+        size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
+
+        // Fill and map the page.
+        memcpy((void*)page, image + off, copy_size);
+        map_page(page_table, USER_BASE + off, page,
+            PAGE_U | PAGE_R | PAGE_W | PAGE_X);
+    }
 
     // Initialize fields.
     proc->pid = i + 1;
     proc->state = PROC_RUNNABLE;
     proc->sp = (u32)sp;
+    proc->page_table = page_table;
     return proc;
 }
 
 void delay(void) {
     for (int i = 0; i < 30000000; i++)
-        asm volatile("nop");
+        __asm__ volatile("nop");
 }
 
 struct process* proc_a;
@@ -245,9 +298,14 @@ void yield(void) {
     if (next == current_proc)
         return;
 
-    asm volatile(
+    __asm__ volatile(
+        "sfence.vma\n"
+        "csrw satp, %[satp]\n"
+        "sfence.vma\n"
         "csrw sscratch, %[sscratch]\n"
-        ::[sscratch] "r" ((u32)&next->stack[sizeof(next->stack)]));
+        ::[satp] "r" (SATP_SV32 | ((u32)next->page_table / PAGE_SIZE)),
+        [sscratch] "r" ((u32)&next->stack[sizeof(next->stack)])
+        );
 
     // Context switch
     struct process* prev = current_proc;
@@ -259,7 +317,7 @@ void yield(void) {
 void proc_a_entry(void) {
     printf("starting process A\n");
     while (1) {
-        putchar('A');
+        // putchar('A');
         yield();
     }
 }
@@ -267,7 +325,7 @@ void proc_a_entry(void) {
 void proc_b_entry(void) {
     printf("starting process B\n");
     while (1) {
-        putchar('B');
+        // putchar('B');
         yield();
     }
 }
@@ -279,28 +337,26 @@ void kernel_main(void)
     printf("\n\n");
 
     write_csr(stvec, (u32)kernel_entry);
-    // asm volatile("unimp");
 
-    idle = create_process((u32)null);
+    idle = create_process(null, 0);
     idle->pid = 0; // idle
     current_proc = idle;
 
-    proc_a = create_process((u32)proc_a_entry);
-    proc_b = create_process((u32)proc_b_entry);
-    yield();
+    create_process(_binary_shell_bin_start, (size_t)_binary_shell_bin_size);
 
+    yield();
     panic("switched to idle process");
 
     for (;;)
-        asm volatile("wfi");
+        __asm__ volatile("wfi");
 }
 
 __attribute__((naked))
 __attribute__((section(".text.boot")))
 void boot(void)
 {
-    asm volatile(
-        "mv sp, %0\n"
+    __asm__ volatile(
+        "mv sp, %[stack_top]\n"
         "j kernel_main\n"
-        :: "r"(__stack_top));
+        ::[stack_top] "r" (__stack_top));
 }
