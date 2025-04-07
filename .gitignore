@@ -8,3 +8,4 @@
 *.pcap
 *.map
 *.elf
+.vscode
