@@ -8,10 +8,14 @@
 
 #define SSTATUS_SPIE (1 << 5)
 
+#define SCAUSE_ECALL 8
+
+
 #define PROCS_MAX 8     // Maximum number of processes
 
 #define PROC_UNUSED   0 // Unused process control structure
 #define PROC_RUNNABLE 1 // Runnable process
+#define PROC_EXITED   2
 
 // Memory Paging
 #define SATP_SV32 (1u << 31)

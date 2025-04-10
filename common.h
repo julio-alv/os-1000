@@ -13,6 +13,10 @@ typedef u32 size_t;
 typedef u32 paddr_t; // Physical address type
 typedef u32 vaddr_t; // Virtual address type
 
+#define SYS_PUTCHAR 1
+#define SYS_GETCHAR 2
+#define SYS_EXIT    3
+
 #define true 1
 #define false 0
 #define null ((void *)0)

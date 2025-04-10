@@ -4,7 +4,6 @@ This is a repo implementing the guide [OS in 1000 Lines of Code](https://operati
 
 ## Running the project
 
-_(this will probably change in the future to a makefile)_
 ```bash
 ./run.sh
 ```
