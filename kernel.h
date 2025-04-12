@@ -6,10 +6,10 @@
 // starting address defined in `user.ld`.
 #define USER_BASE 0x1000000
 
-#define SECTOR_SIZE       512
-#define VIRTQ_ENTRY_NUM   16
-#define VIRTIO_DEVICE_BLK 2
-#define VIRTIO_BLK_PADDR  0x10001000
+#define SECTOR_SIZE              512
+#define VIRTQ_ENTRY_NUM          16
+#define VIRTIO_DEVICE_BLK        2
+#define VIRTIO_BLK_PADDR         0x10001000
 #define VIRTIO_REG_MAGIC         0x00
 #define VIRTIO_REG_VERSION       0x04
 #define VIRTIO_REG_DEVICE_ID     0x08
@@ -39,8 +39,8 @@ struct file {
     size_t size;      // File size
 };
 
-#define FILES_MAX      2
-constexpr auto DISK_MAX_SIZE = align_up(sizeof(file) * FILES_MAX, SECTOR_SIZE);
+constexpr int FILES_MAX = 2;
+constexpr int DISK_MAX_SIZE = align_up(sizeof(file) * FILES_MAX, SECTOR_SIZE);
 
 #define SSTATUS_SPIE (1 << 5)
 #define SSTATUS_SUM  (1 << 18)
@@ -61,7 +61,7 @@ constexpr auto DISK_MAX_SIZE = align_up(sizeof(file) * FILES_MAX, SECTOR_SIZE);
 
 #define panic(fmt, ...) \
     do {                \
-        printf("\033[1;37;41m panic! \033[0m %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);\
+        printf("panic! %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);\
         while (1) {}    \
     } while (0)
 
@@ -122,8 +122,8 @@ struct trap_frame {
 
 struct sbiret
 {
-    i32 value;
-    i32 error;
+    int value;
+    int error;
 };
 
 // Virtqueue Descriptor area entry.

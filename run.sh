@@ -7,7 +7,7 @@ OBJCOPY=/opt/homebrew/opt/llvm/bin/llvm-objcopy
 
 # Path to clang and compiler flags
 CC=/opt/homebrew/opt/llvm/bin/clang
-CFLAGS="-std=c++11 -O2 -g3 -Wall -Wextra --target=riscv32-unknown-elf -fno-stack-protector -ffreestanding -nostdlib"
+CFLAGS="-std=c++17 -O2 -g3 -Wall -Wextra --target=riscv32-unknown-elf -fno-stack-protector -ffreestanding -nostdlib"
 
 # Build the shell (application)
 $CC $CFLAGS -Wl,-Tuser.ld -Wl,-Map=shell.map -o shell.elf shell.cc user.cc common.cc
@@ -25,5 +25,5 @@ $QEMU -machine virt -bios default -nographic -serial mon:stdio --no-reboot \
     -d unimp,guest_errors,int,cpu_reset -D qemu.log \
     -drive id=drive0,file=disk.tar,format=raw,if=none \
     -device virtio-blk-device,drive=drive0,bus=virtio-mmio-bus.0 \
-    -kernel kernel.elf \
-    -S -gdb tcp::1234 \
+    -kernel kernel.elf 
+    

@@ -1,17 +1,19 @@
 #include "user.h"
 
-extern "C" char __stack_top[];
+extern char __stack_top[];
 
 int syscall(int sysno, int arg0, int arg1, int arg2) {
-    int a0 asm("a0") = arg0;
-    int a1 asm("a1") = arg1;
-    int a2 asm("a2") = arg2;
-    int a3 asm("a3") = sysno;
-
-    asm volatile("ecall"
+    int a0;
+    asm volatile(
+        "mv a0, %1\n"
+        "mv a1, %2\n"
+        "mv a2, %3\n"
+        "mv a3, %4\n"
+        "ecall\n"
+        "mv %0, a0\n"
         : "=r"(a0)
-        : "r"(a0), "r"(a1), "r"(a2), "r"(a3)
-        : "memory");
+        : "r"(arg0), "r"(arg1), "r"(arg2), "r"(sysno)
+        : "a0", "a1", "a2", "a3", "memory");
 
     return a0;
 }
@@ -26,7 +28,7 @@ int getchar(void) {
 
 __attribute__((noreturn)) void exit(void) {
     syscall(SYS_EXIT, 0, 0, 0);
-    for (;;); // Just in case!
+    for (;;);
 }
 
 int readfile(const char* filename, char* buf, int len) {

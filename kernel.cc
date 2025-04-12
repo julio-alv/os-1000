@@ -1,10 +1,10 @@
 #include "kernel.h"
 #include "common.h"
 
-extern "C" char __bss[], __bss_end[], __stack_top[];
-extern "C" char __free_ram[], __free_ram_end[];
-extern "C" char __kernel_base[];
-extern "C" char _binary_shell_bin_start[], _binary_shell_bin_size[];
+extern char __bss[], __bss_end[], __stack_top[];
+extern char __free_ram[], __free_ram_end[];
+extern char __kernel_base[];
+extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 paddr_t alloc_pages(u32 n) {
     static paddr_t next_paddr = (paddr_t)__free_ram;
@@ -18,25 +18,31 @@ paddr_t alloc_pages(u32 n) {
     return paddr;
 }
 
-struct sbiret sbi_call(
-    i16 arg0, i16 arg1, i16 arg2, i16 arg3,
-    i16 arg4, i16 arg5, i16 fid, i16 eid)
+sbiret sbi_call(
+    int arg0, int arg1, int arg2, int arg3,
+    int arg4, int arg5, int fid, int eid)
 {
-    i16 a0 asm("a0") = arg0;
-    i16 a1 asm("a1") = arg1;
-    i16 a2 asm("a2") = arg2;
-    i16 a3 asm("a3") = arg3;
-    i16 a4 asm("a4") = arg4;
-    i16 a5 asm("a5") = arg5;
-    i16 a6 asm("a6") = fid;
-    i16 a7 asm("a7") = eid;
+    int error, value;
 
-    asm volatile("ecall"
-        : "=r"(a0), "=r"(a1)
-        : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5), "r"(a6), "r"(a7)
-        : "memory");
+    asm volatile (
+        "mv a0, %2\n"
+        "mv a1, %3\n"
+        "mv a2, %4\n"
+        "mv a3, %5\n"
+        "mv a4, %6\n"
+        "mv a5, %7\n"
+        "mv a6, %8\n"
+        "mv a7, %9\n"
+        "ecall\n"
+        "mv %0, a0\n"
+        "mv %1, a1\n"
+        : "=r"(error), "=r"(value)                // outputs: %0, %1
+        : "r"(arg0), "r"(arg1), "r"(arg2),        // inputs:  %2 - %9
+        "r"(arg3), "r"(arg4), "r"(arg5),
+        "r"(fid), "r"(eid)
+        : "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "memory");
 
-    return (struct sbiret) { .value = a1, .error = a0 };
+    return { .value = value, .error = error };
 }
 
 // ↓ __attribute__((naked)) is very important!
@@ -352,7 +358,7 @@ void putchar(char ch)
     sbi_call(ch, 0, 0, 0, 0, 0, 0, 1 /* Console Putchar */);
 }
 
-i32 getchar(void) {
+int getchar(void) {
     struct sbiret ret = sbi_call(0, 0, 0, 0, 0, 0, 0, 2);
     return ret.error;
 }
@@ -543,7 +549,7 @@ void handle_syscall(struct trap_frame* f) {
         break;
     case SYS_GETCHAR:
         while (1) {
-            i32 ch = getchar();
+            int ch = getchar();
             if (ch >= 0) {
                 f->a0 = ch;
                 break;
@@ -562,7 +568,7 @@ void handle_syscall(struct trap_frame* f) {
         const char* filename = (const char*)f->a0;
         char* buf = (char*)f->a1;
         int len = f->a2;
-        struct file* file = fs_lookup(filename);
+        file* file = fs_lookup(filename);
         if (!file) {
             printf("file not found: %s\n", filename);
             f->a0 = -1;
@@ -589,7 +595,7 @@ void handle_syscall(struct trap_frame* f) {
     }
 }
 
-extern "C" void handle_trap(struct trap_frame* f) {
+extern "C" void handle_trap(trap_frame* f) {
     u32 scause = read_csr(scause);
     u32 stval = read_csr(stval);
     u32 user_pc = read_csr(sepc);
