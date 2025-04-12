@@ -7,7 +7,7 @@ OBJCOPY=/opt/homebrew/opt/llvm/bin/llvm-objcopy
 
 # Path to clang and compiler flags
 CC=/opt/homebrew/opt/llvm/bin/clang
-CFLAGS="-std=c++17 -O2 -g3 -Wall -Wextra --target=riscv32-unknown-elf -fno-stack-protector -ffreestanding -nostdlib"
+CFLAGS="-std=c++17 -O2 -g3 -Wall -Wextra --target=riscv32-unknown-elf -fno-stack-protector -ffreestanding -nostdlib -fno-rtti -fno-exceptions"
 
 # Build the shell (application)
 $CC $CFLAGS -Wl,-Tuser.ld -Wl,-Map=shell.map -o shell.elf shell.cc user.cc common.cc

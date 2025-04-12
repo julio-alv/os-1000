@@ -156,9 +156,9 @@ struct virtq_used {
 
 // Virtqueue.
 struct virtio_virtq {
-    struct virtq_desc descs[VIRTQ_ENTRY_NUM];
-    struct virtq_avail avail;
-    struct virtq_used used __attribute__((aligned(PAGE_SIZE)));
+    virtq_desc descs[VIRTQ_ENTRY_NUM];
+    virtq_avail avail;
+    virtq_used used __attribute__((aligned(PAGE_SIZE)));
     int queue_index;
     volatile u16* used_index;
     u16 last_used_index;

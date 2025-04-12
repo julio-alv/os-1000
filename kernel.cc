@@ -542,7 +542,7 @@ void kernel_entry(void) {
         "sret\n");
 }
 
-void handle_syscall(struct trap_frame* f) {
+void handle_syscall(trap_frame* f) {
     switch (f->a3) {
     case SYS_PUTCHAR:
         putchar(f->a0);
