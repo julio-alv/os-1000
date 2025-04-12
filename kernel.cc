@@ -1,10 +1,10 @@
 #include "kernel.h"
 #include "common.h"
 
-extern char __bss[], __bss_end[], __stack_top[];
-extern char __free_ram[], __free_ram_end[];
-extern char __kernel_base[];
-extern char _binary_shell_bin_start[], _binary_shell_bin_size[];
+extern "C" char __bss[], __bss_end[], __stack_top[];
+extern "C" char __free_ram[], __free_ram_end[];
+extern "C" char __kernel_base[];
+extern "C" char _binary_shell_bin_start[], _binary_shell_bin_size[];
 
 paddr_t alloc_pages(u32 n) {
     static paddr_t next_paddr = (paddr_t)__free_ram;
@@ -22,16 +22,16 @@ struct sbiret sbi_call(
     i16 arg0, i16 arg1, i16 arg2, i16 arg3,
     i16 arg4, i16 arg5, i16 fid, i16 eid)
 {
-    register i16 a0 __asm__("a0") = arg0;
-    register i16 a1 __asm__("a1") = arg1;
-    register i16 a2 __asm__("a2") = arg2;
-    register i16 a3 __asm__("a3") = arg3;
-    register i16 a4 __asm__("a4") = arg4;
-    register i16 a5 __asm__("a5") = arg5;
-    register i16 a6 __asm__("a6") = fid;
-    register i16 a7 __asm__("a7") = eid;
+    i16 a0 asm("a0") = arg0;
+    i16 a1 asm("a1") = arg1;
+    i16 a2 asm("a2") = arg2;
+    i16 a3 asm("a3") = arg3;
+    i16 a4 asm("a4") = arg4;
+    i16 a5 asm("a5") = arg5;
+    i16 a6 asm("a6") = fid;
+    i16 a7 asm("a7") = eid;
 
-    __asm__ volatile("ecall"
+    asm volatile("ecall"
         : "=r"(a0), "=r"(a1)
         : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(a4), "r"(a5), "r"(a6), "r"(a7)
         : "memory");
@@ -41,7 +41,7 @@ struct sbiret sbi_call(
 
 // ↓ __attribute__((naked)) is very important!
 __attribute__((naked)) void user_entry(void) {
-    __asm__ volatile(
+    asm volatile(
         "csrw sepc, %[sepc]        \n"
         "csrw sstatus, %[sstatus]  \n"
         "sret                      \n"
@@ -73,7 +73,7 @@ struct process procs[PROCS_MAX]; // All process control structures.
 
 struct process* create_process(const void* image, size_t image_size) {
     // Find an unused process control structure.
-    struct process* proc = null;
+    struct process* proc = nullptr;
     int i;
     for (i = 0; i < PROCS_MAX; i++) {
         if (procs[i].state == PROC_UNUSED) {
@@ -120,7 +120,7 @@ struct process* create_process(const void* image, size_t image_size) {
         size_t copy_size = PAGE_SIZE <= remaining ? PAGE_SIZE : remaining;
 
         // Fill and map the page.
-        memcpy((void*)page, image + off, copy_size);
+        memcpy((void*)page, (const char*)image + off, copy_size);
         map_page(page_table, USER_BASE + off, page,
             PAGE_U | PAGE_R | PAGE_W | PAGE_X);
     }
@@ -135,7 +135,7 @@ struct process* create_process(const void* image, size_t image_size) {
 
 void delay(void) {
     for (int i = 0; i < 30000000; i++)
-        __asm__ volatile("nop");
+        asm volatile("nop");
 }
 
 struct process* current_proc; // Currently running process
@@ -146,7 +146,7 @@ void switch_context(
     u32* prev_sp,
     u32* next_sp
 ) {
-    __asm__ volatile(
+    asm volatile(
         // Save callee-saved registers onto the current process's stack.
         "addi sp, sp, -13 * 4\n" // Allocate stack space for 13 4-byte registers
         "sw ra,  0  * 4(sp)\n"   // Save callee-saved registers only
@@ -200,7 +200,7 @@ void yield(void) {
     if (next == current_proc)
         return;
 
-    __asm__ volatile(
+    asm volatile(
         "sfence.vma\n"
         "csrw satp, %[satp]\n"
         "sfence.vma\n"
@@ -442,20 +442,20 @@ void fs_flush(void) {
     printf("wrote %d bytes to disk\n", sizeof(disk));
 }
 
-struct file* fs_lookup(const char* filename) {
+file* fs_lookup(const char* filename) {
     for (int i = 0; i < FILES_MAX; i++) {
-        struct file* file = &files[i];
+        file* file = &files[i];
         if (!strcmp(file->name, filename))
             return file;
     }
 
-    return null;
+    return nullptr;
 }
 
 __attribute__((naked))
 __attribute__((aligned(4)))
 void kernel_entry(void) {
-    __asm__ volatile(
+    asm volatile(
         // Retrieve the kernel stack of the running process from sscratch.
         "csrrw sp, sscratch, sp\n"
 
@@ -589,7 +589,7 @@ void handle_syscall(struct trap_frame* f) {
     }
 }
 
-void handle_trap(struct trap_frame* f) {
+extern "C" void handle_trap(struct trap_frame* f) {
     u32 scause = read_csr(scause);
     u32 stval = read_csr(stval);
     u32 user_pc = read_csr(sepc);
@@ -606,7 +606,7 @@ void handle_trap(struct trap_frame* f) {
 }
 
 
-void kernel_main(void)
+extern "C" void kernel_main(void)
 {
     memset(__bss, 0, (size_t)__bss_end - (size_t)__bss);
 
@@ -624,7 +624,7 @@ void kernel_main(void)
     strcpy(buf, "hello from kernel!!!\n");
     read_write_disk(buf, 0, true /* write to the disk */);
 
-    idle = create_process(null, 0);
+    idle = create_process(nullptr, 0);
     idle->pid = 0; // idle
     current_proc = idle;
 
@@ -634,14 +634,14 @@ void kernel_main(void)
     panic("switched to idle process");
 
     for (;;)
-        __asm__ volatile("wfi");
+        asm volatile("wfi");
 }
 
 __attribute__((naked))
 __attribute__((section(".text.boot")))
-void boot(void)
+extern "C" void boot(void)
 {
-    __asm__ volatile(
+    asm volatile(
         "mv sp, %[stack_top]\n"
         "j kernel_main\n"
         ::[stack_top] "r" (__stack_top));

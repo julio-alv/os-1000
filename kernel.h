@@ -32,8 +32,15 @@
 #define VIRTIO_BLK_T_IN  0
 #define VIRTIO_BLK_T_OUT 1
 
+struct file {
+    bool in_use;      // Indicates if this file entry is in use
+    char name[100];   // File name
+    char data[1024];  // File content
+    size_t size;      // File size
+};
+
 #define FILES_MAX      2
-#define DISK_MAX_SIZE  align_up(sizeof(struct file) * FILES_MAX, SECTOR_SIZE)
+constexpr auto DISK_MAX_SIZE = align_up(sizeof(file) * FILES_MAX, SECTOR_SIZE);
 
 #define SSTATUS_SPIE (1 << 5)
 #define SSTATUS_SUM  (1 << 18)
@@ -61,14 +68,14 @@
 #define read_csr(reg)   \
     ({                  \
         u32 tmp;        \
-        __asm__ volatile("csrr %0, " #reg : "=r"(tmp));\
+        asm volatile("csrr %0, " #reg : "=r"(tmp));\
         tmp;            \
     })
 
 #define write_csr(reg, value)   \
     do {                        \
         u32 tmp = (value);      \
-        __asm__ volatile("csrw " #reg ", %0" ::"r"(tmp));\
+        asm volatile("csrw " #reg ", %0" ::"r"(tmp));\
     } while (0)
 
 struct process {
@@ -171,9 +178,6 @@ struct virtio_blk_req {
     u8 status;
 } __attribute__((packed));
 
-#define FILES_MAX      2
-#define DISK_MAX_SIZE  align_up(sizeof(struct file) * FILES_MAX, SECTOR_SIZE)
-
 struct tar_header {
     char name[100];
     char mode[8];
@@ -196,9 +200,3 @@ struct tar_header {
     // (flexible array member)
 } __attribute__((packed));
 
-struct file {
-    bool in_use;      // Indicates if this file entry is in use
-    char name[100];   // File name
-    char data[1024];  // File content
-    size_t size;      // File size
-};

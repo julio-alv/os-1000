@@ -1,6 +1,6 @@
 #include "user.h"
 
-void main(void) {
+extern "C" void main(void) {
     while (1) {
     prompt:
         printf("> ");

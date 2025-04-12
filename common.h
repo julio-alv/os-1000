@@ -1,6 +1,5 @@
 #pragma once
 
-typedef int bool;
 typedef char i8;
 typedef short i16;
 typedef long i32;
@@ -19,11 +18,8 @@ typedef u32 vaddr_t; // Virtual address type
 #define SYS_READFILE  4
 #define SYS_WRITEFILE 5
 
-#define true 1
-#define false 0
-#define null ((void *)0)
-#define align_up(value, align) __builtin_align_up(value, align)
-#define is_aligned(value, align) __builtin_is_aligned(value, align)
+// #define align_up(value, align) __builtin_align_up(value, align)
+// #define is_aligned(value, align) __builtin_is_aligned(value, align)
 #define offset_of(type, member) __builtin_offsetof(type, member)
 
 // Memory allocation
@@ -34,6 +30,16 @@ typedef u32 vaddr_t; // Virtual address type
 #define va_start __builtin_va_start
 #define va_end __builtin_va_end
 #define va_arg __builtin_va_arg
+
+template <typename T, typename U>
+constexpr T align_up(T value, U alignment) {
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+template <typename T, typename U>
+constexpr bool is_aligned(T value, U alignment) {
+    return (value & (alignment - 1)) == 0;
+}
 
 void* memset(void* buf, char c, size_t n);
 void* memcpy(void* dst, const void* src, size_t n);
