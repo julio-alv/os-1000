@@ -63,10 +63,12 @@ void printf(const char* fmt, ...)
             putchar('%');
             break;
         case 's':
+        {
             const char* s = va_arg(vargs, const char*);
             while (*s)
                 putchar(*s++);
             break;
+        }
         case 'd': // Decimal
         {
             int value = va_arg(vargs, int);

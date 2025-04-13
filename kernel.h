@@ -6,10 +6,10 @@
 // starting address defined in `user.ld`.
 #define USER_BASE 0x1000000
 
-#define SECTOR_SIZE       512
-#define VIRTQ_ENTRY_NUM   16
-#define VIRTIO_DEVICE_BLK 2
-#define VIRTIO_BLK_PADDR  0x10001000
+#define SECTOR_SIZE              512
+#define VIRTQ_ENTRY_NUM          16
+#define VIRTIO_DEVICE_BLK        2
+#define VIRTIO_BLK_PADDR         0x10001000
 #define VIRTIO_REG_MAGIC         0x00
 #define VIRTIO_REG_VERSION       0x04
 #define VIRTIO_REG_DEVICE_ID     0x08
@@ -32,8 +32,15 @@
 #define VIRTIO_BLK_T_IN  0
 #define VIRTIO_BLK_T_OUT 1
 
-#define FILES_MAX      2
-#define DISK_MAX_SIZE  align_up(sizeof(struct file) * FILES_MAX, SECTOR_SIZE)
+struct file {
+    bool in_use;      // Indicates if this file entry is in use
+    char name[100];   // File name
+    char data[1024];  // File content
+    size_t size;      // File size
+};
+
+constexpr int FILES_MAX = 2;
+constexpr int DISK_MAX_SIZE = align_up(sizeof(file) * FILES_MAX, SECTOR_SIZE);
 
 #define SSTATUS_SPIE (1 << 5)
 #define SSTATUS_SUM  (1 << 18)
@@ -54,21 +61,21 @@
 
 #define panic(fmt, ...) \
     do {                \
-        printf("\033[1;37;41m panic! \033[0m %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);\
+        printf("panic! %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__);\
         while (1) {}    \
     } while (0)
 
 #define read_csr(reg)   \
     ({                  \
         u32 tmp;        \
-        __asm__ volatile("csrr %0, " #reg : "=r"(tmp));\
+        asm volatile("csrr %0, " #reg : "=r"(tmp));\
         tmp;            \
     })
 
 #define write_csr(reg, value)   \
     do {                        \
         u32 tmp = (value);      \
-        __asm__ volatile("csrw " #reg ", %0" ::"r"(tmp));\
+        asm volatile("csrw " #reg ", %0" ::"r"(tmp));\
     } while (0)
 
 struct process {
@@ -115,8 +122,8 @@ struct trap_frame {
 
 struct sbiret
 {
-    i32 value;
-    i32 error;
+    int value;
+    int error;
 };
 
 // Virtqueue Descriptor area entry.
@@ -149,9 +156,9 @@ struct virtq_used {
 
 // Virtqueue.
 struct virtio_virtq {
-    struct virtq_desc descs[VIRTQ_ENTRY_NUM];
-    struct virtq_avail avail;
-    struct virtq_used used __attribute__((aligned(PAGE_SIZE)));
+    virtq_desc descs[VIRTQ_ENTRY_NUM];
+    virtq_avail avail;
+    virtq_used used __attribute__((aligned(PAGE_SIZE)));
     int queue_index;
     volatile u16* used_index;
     u16 last_used_index;
@@ -170,9 +177,6 @@ struct virtio_blk_req {
     // Third descriptor: writable by the device (VIRTQ_DESC_F_WRITE)
     u8 status;
 } __attribute__((packed));
-
-#define FILES_MAX      2
-#define DISK_MAX_SIZE  align_up(sizeof(struct file) * FILES_MAX, SECTOR_SIZE)
 
 struct tar_header {
     char name[100];
@@ -196,9 +200,3 @@ struct tar_header {
     // (flexible array member)
 } __attribute__((packed));
 
-struct file {
-    bool in_use;      // Indicates if this file entry is in use
-    char name[100];   // File name
-    char data[1024];  // File content
-    size_t size;      // File size
-};
