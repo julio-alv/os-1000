@@ -15,8 +15,10 @@ The operating system contais a basic scheduler, file system and shell
 here are the programs that you can run:
 
 ```sh
-hello # prints "hello from the shell!"
+hello # prints "Hello world from shell!"
 exit # closes the process
-readfile # reads from the file system (from hello.txt)
-writefile # writes a file into the file system (should be visible if you uncompress the resulting .tar)
+readfile # reads the contents from hello.txt
+writefile # writes a file into the file system (should be visible if you uncompress the resulting disk.tar)
 ```
+
+the OS mounts the folder /disk as a tar, which is the format that the file system uses
